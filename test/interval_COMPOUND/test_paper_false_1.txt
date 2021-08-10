@@ -1,0 +1,7 @@
+status,picture
+idle,fp
+stt,sp
+idle,sp
+idle,sp
+stp,tp
+idle,fp

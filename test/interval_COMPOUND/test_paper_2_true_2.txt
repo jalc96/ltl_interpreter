@@ -1,0 +1,4 @@
+command,resolution,rx_rate
+stt,high,5
+idle,low,1
+stp,high,5

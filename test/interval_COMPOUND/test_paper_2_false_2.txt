@@ -1,0 +1,11 @@
+command,resolution,rx_rate
+idle,high,-5
+stt,high,0
+idle,low,7
+idle,low,6
+idle,low,5
+idle,low,4
+idle,high,2
+idle,high,1
+idle,high,1
+stp,high,5
