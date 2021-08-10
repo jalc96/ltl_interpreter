@@ -3,7 +3,6 @@
 #include<stdint.h>
 #include<cstring>
 #include<math.h>
-#include<intrin.h>
 
 #define BUFFER_SIZE 256
 #define FOLDERS_COUNT 256
