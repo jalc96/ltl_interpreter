@@ -143,6 +143,7 @@ struct Trace {
 };
 
 global_variable Trace *T;
+u64 trace_memory_used = 0;
 
 void free_trace(Trace *trace) {
     if (trace) {
@@ -158,6 +159,7 @@ void enqueue(Trace *trace, char *text) {
 
     if (trace->first_free >= MESSAGES_PER_QUEUE) {
         trace->next = (Trace *)malloc(sizeof(Trace));
+        trace_memory_used += sizeof(Trace);
 
         if (!trace->next) {
             error("run out of memory");
@@ -337,6 +339,7 @@ void push(Nodes_stack *stack, LTL_node *node, u32 trace_index, u32 child_index=0
     if (stack->head >= STACK_SIZE) {
         stack->head--;
         stack->next = (Nodes_stack *)malloc(sizeof(Nodes_stack));
+        trace_memory_used += sizeof(Nodes_stack);
 
         if (stack->next) {
             stack = stack->next;
@@ -394,6 +397,7 @@ u64 times_evaluated = 0;
 bool LTL_graph::evaluate_step(bool debug, Trace *trace, u32 steps_to_skip) {
     // NOTE: steps_to_skip is used for the first trace line to read, if we have to skip 2 (2 consecutive nexts) the first line entered into the symbol table is the 2
     Nodes_stack *stack = (Nodes_stack *)malloc(sizeof(Nodes_stack));
+    trace_memory_used += sizeof(Nodes_stack);
     stack->head = 0;
     stack->next = 0;
 
@@ -1551,6 +1555,13 @@ s32 main(s32 argc, char *argv[]) {
                 }
 
                 parameters.help = true;
+            } else if (equals(argv[p], "-m") || equals(argv[p], "--memory_used")) {
+                if (parameters.memory_used) {
+                    printf("--memory_used already set");
+                    return -1;
+                }
+
+                parameters.memory_used = true;
             } else {
                 printf("parameter '%s' not recognized, this program only accepts:\n", argv[p]);
                 parameters.help = true;
@@ -1562,7 +1573,7 @@ s32 main(s32 argc, char *argv[]) {
     }
 
     if (parameters.tutorial || argc == 1) {
-        printf("This interpreter accepts linear temporal logic formulas ([] x==1, (<> y > 0) || ([] y < -2), as well as interval temporal logic ([]_{1}x == 1, <>_{y>4}true).\n");
+        printf("This interpreter accepts linear temporal logic formulas ([] x==1, (<> y > 0) || ([] y < -2), as well as event-driven temporal logic ([]_{1}x == 1, <>_{y>4}true).\n");
         printf("The basic data types are integer, float, string and date.\n");
         printf("The string data must be enclosed between single quotes ' or escaped double quotes \".\n");
         printf("Dates must be in UTC format YYYY-MM-DDThh:mm:ss.ms with milliseconds(ms) being 3 digits.\n");
@@ -1581,6 +1592,7 @@ s32 main(s32 argc, char *argv[]) {
         printf("    -e, --elapsed: shows the elapsed time\n");
         printf("    -h, --help: shows the help information\n");
         printf("    -t, --tutorial: shows a little tutorial of the program\n");
+        printf("    -m, --memory_used: shows a little tutorial of the program\n");
         return 0;
     }
 
@@ -1676,6 +1688,7 @@ s32 main(s32 argc, char *argv[]) {
     LTL_graph *graph;
 
     T = (Trace *)malloc(sizeof(Trace));
+    trace_memory_used = sizeof(Trace);
     T->first_free = 0;
     T->next = 0;
 
@@ -1781,6 +1794,8 @@ s32 main(s32 argc, char *argv[]) {
         message_read_index++;
     }
 
+    u64 streaming_size = streaming.count;
+    free(streaming.raw_buffer);
     bool result;
 
     if (intervals) {
@@ -1821,7 +1836,7 @@ s32 main(s32 argc, char *argv[]) {
         } else if (size < MEGABYTE) {
             size_scale = "KB";
             size = size / KILOBYTE;
-        } else if (size >= MEGABYTE) {
+        } else if (size < GIGABYTE) {
             size_scale = "MB";
             size = size / MEGABYTE;
         } else {
@@ -1834,7 +1849,7 @@ s32 main(s32 argc, char *argv[]) {
         } else if (speed < MEGABYTE) {
             speed_scale = "KB";
             speed = speed / KILOBYTE;
-        } else if (speed >= MEGABYTE) {
+        } else if (speed < GIGABYTE) {
             speed_scale = "MB";
             speed = speed / MEGABYTE;
         } else {
@@ -1850,7 +1865,27 @@ s32 main(s32 argc, char *argv[]) {
         );
     }
 
-    free(streaming.raw_buffer);
+    if (parameters.debug_info || parameters.memory_used) {
+        u64 total_memory_used = trace_memory_used + ARENA->size + streaming_size;
+        f64 memory_used = (f64)total_memory_used;
+        char *memory_scale;
+
+        if (total_memory_used < KILOBYTE) {
+            memory_scale = "B";
+        } else if (total_memory_used < MEGABYTE) {
+            memory_scale = "KB";
+            memory_used = (f64)total_memory_used / (f64)KILOBYTE;
+        } else if (total_memory_used < GIGABYTE) {
+            memory_scale = "MB";
+            memory_used = (f64)total_memory_used / (f64)MEGABYTE;
+        } else {
+            memory_scale = "GB";
+            memory_used = (f64)total_memory_used / (f64)GIGABYTE;
+        }
+
+        printf("Memory used: %.2f %s", memory_used, memory_scale);
+    }
+
     free(mem.base);
     free_trace(T);
 
